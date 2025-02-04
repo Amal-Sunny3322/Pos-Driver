@@ -74,8 +74,13 @@ public class DriverController {
         driver.setDecodedPin(isPinValid);
         if (Objects.equals(isTerminalValid, "true")) {
             logger.info("Entered HSM phase..");
-            String pin = hsmService.communicateWithHSM(driver);
+            String pin = hsmService.communicateWithHSM(driver,driver.getPin());
             logger.debug("Encrypted pin: {}", pin);
+            driver.setHsmPin(pin);
+            if(!(driver.getNew_pin() == null)){
+                String newPinBlock = hsmService.communicateWithHSM(driver,driver.getNew_pin());
+                driver.setDecodedNewPin(newPinBlock);
+            }
             byte[] isoMsg = iso8583Service.createIso8583Message(driver, pin);
             logger.info("Iso message created");
             if (isoMsg == null) {
@@ -87,21 +92,20 @@ public class DriverController {
                 return ResponseEntity.ok(new PosTransRes("Socket connection failed.", "false", "false"));
             }
 
-            String receiveResponse = iso8583Service.setResponse(switchResponse,driver);
-            logger.info("iso response :"+receiveResponse);
+            String receiveResponse = iso8583Service.setResponse(switchResponse, driver);
+            logger.info("iso response :" + receiveResponse);
             return ResponseEntity.ok(receiveResponse);
         }
 
         return (ResponseEntity<?>) ResponseEntity.ok(new PosTransRes("Verification failed.", "false", "false"));
     }
 
-
     private static final String LOGS_DIRECTORY = "logs"; // Adjust if needed
 
     // Get a list of all available log files
     @GetMapping("/logs")
     public List<String> listLogFiles() throws IOException {
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(LOGS_DIRECTORY), "application-*.log")) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(LOGS_DIRECTORY), "*.log")) {
             return StreamSupport.stream(stream.spliterator(), false)
                     .map(Path::getFileName)
                     .map(Path::toString)
@@ -114,31 +118,38 @@ public class DriverController {
     public List<String> getLogsByDate(@PathVariable String date) throws IOException {
         String logFileName = "application-" + date + ".log";
         Path logFilePath = Paths.get(LOGS_DIRECTORY, logFileName);
+        Path logFilePath2 = Paths.get(LOGS_DIRECTORY, "application.log");
 
-        if (!Files.exists(logFilePath)) {
+        if ((!Files.exists(logFilePath)) && (!Files.exists(logFilePath2))) {
             throw new IOException("Log file for " + date + " not found.");
         }
+        System.out.println("logFileName: "+ logFilePath);
+        if (logFilePath.toString().equals("logs\\application-application.log")) {
+            logFileName = "application.log";
+             logFilePath = Paths.get(LOGS_DIRECTORY, logFileName);
 
-        // Read the log file, filter by .Service. or .Controller., and insert line breaks after specific messages
+        }
+
+        // Read the log file, filter by .Service. or .Controller., and insert line
+        // breaks after specific messages
         return Files.lines(logFilePath)
                 .filter(line -> line.contains(".Service.") || line.contains(".Controller."))
                 .map(line -> {
                     // Insert a line break after specific patterns
                     if (line.contains("Switch connection failed:")) {
-                        return line + "\n";  // Add a line break after SwitchService message
+                        return line + "\n"; // Add a line break after SwitchService message
                     } else if (line.contains(".Controller.DriverController")) {
-                        return line + "\n";  // Add a line break after DriverController message
+                        return line + "\n"; // Add a line break after DriverController message
                     }
-                    return line;  // No change for other lines
+                    return line; // No change for other lines
                 })
                 .flatMap(line -> {
-                    // Here we split the log line to ensure it gets a line break after the matched conditions
+                    // Here we split the log line to ensure it gets a line break after the matched
+                    // conditions
                     return Stream.of(line.split("\n"));
                 })
                 .collect(Collectors.toList());
     }
-
-
 
     @PostMapping("/test2")
     public String testApi(@RequestBody DriverRequest driverRequest) {

@@ -33,11 +33,11 @@ public class HsmService {
         this.pinDecryption = pinDecryption;
     }
 
-    public String communicateWithHSM(DriverRequest driverRequest) throws IOException {
+    public String communicateWithHSM(DriverRequest driverRequest, String pinBlock) throws IOException {
 //
         String pan = driverRequest.getPan();
         logger.debug("Command sending to hsm for clear pin.: "+driverRequest);
-        String pin = pinDecryption.pinDecrypting(driverRequest.getPin());
+        String pin = pinDecryption.pinDecrypting(pinBlock);
 
         // Fetch terminal and HSM details
         Optional<Terminal> terminalOptional = vitaService.findTerminalBySerialNumber(driverRequest.getSl_no());
@@ -49,6 +49,7 @@ public class HsmService {
         String hsmHost = terminal.getHsm().getIp();
         String hsmPort = terminal.getHsm().getPort();
 
+        System.out.println("Host : "+ hsmHost+" Port : "+hsmPort);
         HsmConnection hsmCon = new HsmConnection(hsmHost, Integer.parseInt(hsmPort));
 
         String  encryptedPin = sendBaCommand(pin,pan,hsmCon);
